@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SMART ATM — Fingerprint Simulation (Option 2)</title>
+<style>
+  :root{
+    --bg:#f4f7fb; --card:#fff; --accent:#0b74de; --danger:#d9534f; --ok:#28a745;
+    --muted:#6b7280; --panel:#eef4ff;
+  }
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:12px;background:var(--bg);color:#0b1a2b}
+  header{display:flex;align-items:center;gap:12px}
+  h1{font-size:18px;margin:0}
+  .app{max-width:920px;margin:12px auto;padding:12px}
+  .layout{display:grid;grid-template-columns:1fr 360px;gap:12px}
+  .card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(12,30,60,0.06)}
+  .left .section{margin-bottom:12px}
+  .home-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .tile{background:var(--panel);padding:12px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+  .tile h3{margin:0;font-size:14px}
+  .tile p{margin:0;font-size:12px;color:var(--muted)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  input,select,button,textarea{font-size:14px}
+  input[type="text"], input[type="password"], input[type="number"], textarea{
+    width:100%;padding:8px;border-radius:8px;border:1px solid #dbe7fb;background:#fff;box-sizing:border-box;
+  }
+  button{padding:8px 10px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer}
+  .btn-danger{background:var(--danger)}
+  .muted{color:var(--muted);font-size:13px}
+  .small{font-size:13px}
+  .log{height:220px;overflow:auto;background:#0b1224;color:#fff;padding:8px;border-radius:8px;font-family:monospace;font-size:12px}
+  .atm-screen{min-height:220px;display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;gap:8px}
+  .kbd{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+  .key{padding:12px;border-radius:8px;background:#fff;border:1px solid #dbe7fb;text-align:center;cursor:pointer}
+  .center{text-align:center}
+  .success{color:var(--ok);font-weight:600}
+  .error{color:var(--danger);font-weight:600}
+  footer{margin-top:12px;color:var(--muted);font-size:13px}
+  .mini-table{border-collapse:collapse;width:100%;font-size:13px}
+  .mini-table td{padding:6px;border-bottom:1px solid #f1f5fb}
+  @media (max-width:880px){ .layout{grid-template-columns:1fr} .left,.right{order:initial} }
+</style>
+</head>
+<body>
+<div class="app">
+  <header><h1>SMART ATM (Fingerprint Simulation) — Demo</h1></header>
+  <div class="layout">
+    <div class="left card">
+      <div class="section">
+        <div class="home-grid">
+          <div class="tile" id="cardLoginTile"><h3>Card Login</h3><p>Login with card number + PIN</p></div>
+          <div class="tile" id="fingerLoginTile"><h3>Fingerprint Login</h3><p>Simulated fingerprint capture</p></div>
+          <div class="tile" id="enrollTile"><h3>Enroll Fingerprint</h3><p>Assign fingerprint to account</p></div>
+        </div>
+      </div>
+
+      <!-- ATM Screen (dynamically switches) -->
+      <div id="screen" class="card atm-screen">
+        <!-- initial welcome screen -->
+        <div id="welcomeView" class="">
+          <p class="muted">Welcome to the SMART ATM simulation. Choose a login method from the tiles above.</p>
+          <div class="row">
+            <button id="demo1">Preload Demo Session (Pavithra)</button>
+            <button id="demo2" class="btn-danger">Preload Demo 2 (Demo User)</button>
+          </div>
+        </div>
+
+        <!-- Card Login View -->
+        <div id="cardLoginView" style="display:none">
+          <h3>Card Login</h3>
+          <label class="small">Card Number</label>
+          <input id="cardNumber" type="text" placeholder="e.g. 1002" />
+          <label class="small">PIN</label>
+          <input id="pinInput" type="password" placeholder="4-digit PIN" />
+          <div class="row">
+            <button id="cardLoginBtn">Login</button>
+            <button id="cardCancelBtn" class="btn-danger">Cancel</button>
+          </div>
+          <div class="muted small">Sample accounts: 1001 (PIN:1234), 1002 (PIN:5678)</div>
+        </div>
+
+        <!-- Fingerprint Login View -->
+        <div id="fingerLoginView" style="display:none">
+          <h3>Fingerprint Login</h3>
+          <label class="small">Simulate Fingerprint Capture (enter fingerprint ID/text)</label>
+          <input id="fingerInput" type="text" placeholder="e.g. FP_PAVITHRA_001" />
+          <div class="row">
+            <button id="fingerLoginBtn">Verify Fingerprint</button>
+            <button id="fingerCancelBtn" class="btn-danger">Cancel</button>
+          </div>
+          <div class="muted small">Only exact enrolled fingerprint strings are accepted for matching.</div>
+        </div>
+
+        <!-- Enroll View -->
+        <div id="enrollView" style="display:none">
+          <h3>Enroll Fingerprint</h3>
+          <label class="small">Card Number</label>
+          <input id="enrollCard" type="text" placeholder="e.g. 1002" />
+          <label class="small">Simulate Fingerprint Capture (enter fingerprint ID/text)</label>
+          <input id="enrollFinger" type="text" placeholder="e.g. FP_PAVITHRA_001" />
+          <div class="row">
+            <button id="enrollBtn">Enroll</button>
+            <button id="enrollCancel" class="btn-danger">Cancel</button>
+          </div>
+          <div class="muted small">Enrollment stores the exact string for future fingerprint logins.</div>
+        </div>
+
+        <!-- ATM Menu (after auth) -->
+        <div id="atmMenuView" style="display:none">
+          <h3 id="atmTitle">ATM Menu</h3>
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <button id="checkBalBtn">Check Balance</button>
+            <button id="withdrawBtn">Withdraw</button>
+            <button id="depositBtn">Deposit</button>
+            <button id="cardlessDepBtn">Cardless Deposit</button>
+            <button id="cardlessWdrBtn">Cardless Withdrawal</button>
+            <button id="miniStmtBtn">Mini Statement</button>
+            <button id="logoutBtn" class="btn-danger">Logout</button>
+          </div>
+
+          <div id="atmActionArea" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column: Logs & Account Info -->
+    <div class="right card">
+      <h3>Session / Logs</h3>
+      <div id="sessionInfo" class="muted small">No active session</div>
+      <div style="margin-top:8px" class="log" id="logArea">[System log]</div>
+
+      <h3 style="margin-top:12px">Accounts (demo)</h3>
+      <table class="mini-table">
+        <tbody>
+          <tr><td><b>Card</b></td><td><b>Name</b></td></tr>
+          <tr><td>1001</td><td>Demo User</td></tr>
+          <tr><td>1002</td><td>Pavithra (fingerprint pre-enrolled)</td></tr>
+        </tbody>
+      </table>
+
+      <footer>Tip: Use the Preload Demo buttons to quickly log in as demo accounts.</footer>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  SMART ATM GUI Simulation (Option 2)
+  - Only exact enrolled fingerprint strings are valid (per-account).
+  - Two sample accounts are pre-seeded:
+      1001 (PIN 1234) Demo User, bal 5000, mobile 9876543210, no fingerprint
+      1002 (PIN 5678) Pavithra, bal 3000, mobile 9876501234, fingerprint "FP_PAVITHRA_001" enrolled
+*/
+
+// ---------- Data model ----------
+const accounts = {
+  "1001": { card:"1001", pin:"1234", name:"Demo User", balance:5000.0, mobile:"9876543210", fingerprint:null, transactions:[] },
+  "1002": { card:"1002", pin:"5678", name:"Pavithra", balance:3000.0, mobile:"9876501234", fingerprint:"FP_PAVITHRA_001", transactions:[] }
+};
+
+let activeAccount = null;
+const logArea = document.getElementById('logArea');
+const sessionInfo = document.getElementById('sessionInfo');
+
+// ---------- Helpers ----------
+function log(msg){
+  const ts = new Date().toLocaleString();
+  logArea.textContent = `[${ts}] ${msg}\n` + logArea.textContent;
+}
+
+function setSession(acc){
+  activeAccount = acc;
+  if(acc){
+    sessionInfo.innerHTML = `<b>${acc.name}</b> &nbsp; (Card: ${acc.card})`;
+    document.getElementById('atmTitle').textContent = `ATM Menu — ${acc.name}`;
+  } else {
+    sessionInfo.textContent = 'No active session';
+  }
+}
+
+function showView(id){
+  const views = ['welcomeView','cardLoginView','fingerLoginView','enrollView','atmMenuView'];
+  views.forEach(v => document.getElementById(v).style.display = (v===id) ? '' : 'none');
+}
+
+// ---------- Home Tiles wiring ----------
+document.getElementById('cardLoginTile').onclick = ()=> showView('cardLoginView');
+document.getElementById('fingerLoginTile').onclick = ()=> showView('fingerLoginView');
+document.getElementById('enrollTile').onclick = ()=> showView('enrollView');
+
+// ---------- Demo preload ----------
+document.getElementById('demo1').onclick = ()=> {
+  // Preload Pavithra
+  const acc = accounts["1002"];
+  setSession(acc);
+  showView('atmMenuView');
+  log(`Demo login as ${acc.name} (cardless demo)`);
+};
+document.getElementById('demo2').onclick = ()=> {
+  const acc = accounts["1001"];
+  setSession(acc);
+  showView('atmMenuView');
+  log(`Demo login as ${acc.name} (cardless demo)`);
+};
+
+// ---------- Card Login ----------
+document.getElementById('cardLoginBtn').onclick = ()=> {
+  const card = document.getElementById('cardNumber').value.trim();
+  const pin = document.getElementById('pinInput').value.trim();
+  if(!card || !pin){ alert('Enter card and PIN'); return; }
+  const acc = accounts[card];
+  if(acc && acc.pin === pin){
+    setSession(acc);
+    log(`Card login successful: ${acc.name}`);
+    showView('atmMenuView');
+  } else {
+    alert('Invalid card or PIN');
+    log(`Failed card login attempt for card ${card}`);
+  }
+};
+document.getElementById('cardCancelBtn').onclick = ()=> { showView('welcomeView'); };
+
+// ---------- Fingerprint Login ----------
+document.getElementById('fingerLoginBtn').onclick = ()=> {
+  const captured = document.getElementById('fingerInput').value.trim();
+  if(!captured){ alert('Enter simulated fingerprint data'); return; }
+  // match against accounts with enrolled fingerprint (exact string match)
+  let matched = null;
+  Object.values(accounts).forEach(a => {
+    if(a.fingerprint && a.fingerprint === captured) matched = a;
+  });
+  if(matched){
+    setSession(matched);
+    log(`Fingerprint login success: ${matched.name}`);
+    showView('atmMenuView');
+  } else {
+    alert('Fingerprint not recognized. Try again or enroll.');
+    log(`Fingerprint login failed for capture "${captured}"`);
+  }
+};
+document.getElementById('fingerCancelBtn').onclick = ()=> showView('welcomeView');
+
+// ---------- Enroll fingerprint ----------
+document.getElementById('enrollBtn').onclick = ()=> {
+  const card = document.getElementById('enrollCard').value.trim();
+  const fp = document.getElementById('enrollFinger').value.trim();
+  if(!card || !fp){ alert('Enter card and fingerprint string'); return; }
+  const acc = accounts[card];
+  if(!acc){ alert('Account not found'); log(`Enroll failed: card ${card} not found`); return; }
+  acc.fingerprint = fp;
+  acc.transactions.push(`${new Date().toLocaleString()} | Fingerprint enrolled`);
+  log(`Fingerprint "${fp}" enrolled for ${acc.name} (card ${card})`);
+  alert(`Fingerprint enrolled for ${acc.name}`);
+  document.getElementById('enrollCard').value=''; document.getElementById('enrollFinger').value='';
+  showView('welcomeView');
+};
+document.getElementById('enrollCancel').onclick = ()=> showView('welcomeView');
+
+// ---------- ATM Menu actions ----------
+document.getElementById('checkBalBtn').onclick = ()=> {
+  if(!ensureAuth()) return;
+  const area = document.getElementById('atmActionArea');
+  area.innerHTML = `<div><b>Available balance:</b> ₹ ${activeAccount.balance.toFixed(2)}</div>`;
+  log(`Checked balance for ${activeAccount.name}`);
+};
+
+document.getElementById('withdrawBtn').onclick = ()=> {
+  if(!ensureAuth()) return;
+  renderWithdrawUI();
+};
+
+document.getElementById('depositBtn').onclick = ()=> {
+  if(!ensureAuth()) return;
+  renderDepositUI();
+};
+
+document.getElementById('miniStmtBtn').onclick = ()=> {
+  if(!ensureAuth()) return;
+  renderMiniStatement();
+};
+
+document.getElementById('logoutBtn').onclick = ()=> {
+  if(!activeAccount){ alert('No session'); return; }
+  log(`Logout: ${activeAccount.name}`);
+  setSession(null);
+  showView('welcomeView');
+};
+
+// Cardless Deposit (Fingerprint + Mobile + OTP)
+document.getElementById('cardlessDepBtn').onclick = ()=> {
+  if(!ensureAuth()) return;
+  // though cardless deposit normally doesn't require login, we follow your Java behavior and verify fingerprint for account
+  renderCardlessDepositUI();
+};
+
+// Cardless Withdrawal (Fingerprint only)
+document.getElementById('cardlessWdrBtn').onclick = ()=> {
+  if(!ensureAuth()) return;
+  renderCardlessWithdrawUI();
+};
+
+// ---------- Utility UI functions ----------
+function ensureAuth(){
+  if(!activeAccount){ alert('Please login first'); return false; }
+  return true;
+}
+
+function renderWithdrawUI(){
+  const area = document.getElementById('atmActionArea');
+  area.innerHTML = `
+    <div><label class="small">Amount to Withdraw (₹)</label><input id="wAmt" type="number" min="1" /></div>
+    <div class="row"><button id="wConfirm">Withdraw</button><button id="wCancel" class="btn-danger">Cancel</button></div>
+  `;
+  document.getElementById('wConfirm').onclick = ()=> {
+    const amt = parseFloat(document.getElementById('wAmt').value);
+    if(isNaN(amt) || amt<=0){ alert('Invalid amount'); return; }
+    if(amt > activeAccount.balance){ alert('Insufficient balance'); return; }
+    activeAccount.balance -= amt;
+    activeAccount.transactions.push(`${new Date().toLocaleString()} | WITHDRAW ₹${amt.toFixed(2)} | bal ₹${activeAccount.balance.toFixed(2)}`);
+    log(`Withdraw: ₹${amt.toFixed(2)} by ${activeAccount.name}`);
+    alert(`Please collect cash. New balance ₹ ${activeAccount.balance.toFixed(2)}`);
+    area.innerHTML='';
+  };
+  document.getElementById('wCancel').onclick = ()=> area.innerHTML='';
+}
+
+function renderDepositUI(){
+  const area = document.getElementById('atmActionArea');
+  area.innerHTML = `
+    <div><label class="small">Amount to Deposit (₹)</label><input id="dAmt" type="number" min="1" /></div>
+    <div class="row"><button id="dConfirm">Deposit</button><button id="dCancel" class="btn-danger">Cancel</button></div>
+  `;
+  document.getElementById('dConfirm').onclick = ()=> {
+    const amt = parseFloat(document.getElementById('dAmt').value);
+    if(isNaN(amt) || amt<=0){ alert('Invalid amount'); return; }
+    activeAccount.balance += amt;
+    activeAccount.transactions.push(`${new Date().toLocaleString()} | DEPOSIT ₹${amt.toFixed(2)} | bal ₹${activeAccount.balance.toFixed(2)}`);
+    log(`Deposit: ₹${amt.toFixed(2)} to ${activeAccount.name}`);
+    alert(`Deposit successful. New balance ₹ ${activeAccount.balance.toFixed(2)}`);
+    area.innerHTML='';
+  };
+  document.getElementById('dCancel').onclick = ()=> area.innerHTML='';
+}
+
+function renderMiniStatement(){
+  const area = document.getElementById('atmActionArea');
+  const tx = activeAccount.transactions.slice(-5).reverse();
+  if(tx.length===0){ area.innerHTML = `<div>No transactions yet.</div>`; return; }
+  let html = '<div><b>Mini Statement (last 5)</b><table class="mini-table">';
+  tx.forEach(t => html += `<tr><td>${t}</td></tr>`);
+  html += '</table></div>';
+  area.innerHTML = html;
+  log(`Displayed mini statement for ${activeAccount.name}`);
+}
+
+// Cardless Deposit UI: fingerprint -> mobile -> OTP -> deposit amount
+function renderCardlessDepositUI(){
+  const area = document.getElementById('atmActionArea');
+  area.innerHTML = `
+    <div><label class="small">Simulate fingerprint (enter fingerprint string)</label><input id="cdFinger" type="text" /></div>
+    <div><label class="small">Enter registered mobile number</label><input id="cdMobile" type="text" /></div>
+    <div class="row"><button id="cdSendOtp">Send OTP</button><button id="cdCancel" class="btn-danger">Cancel</button></div>
+    <div id="cdOtpArea"></div>
+  `;
+  document.getElementById('cdSendOtp').onclick = ()=> {
+    const f = document.getElementById('cdFinger').value.trim();
+    const m = document.getElementById('cdMobile').value.trim();
+    if(!f || !m){ alert('Enter fingerprint and mobile'); return; }
+    // verify fingerprint exact match for activeAccount
+    if(!activeAccount.fingerprint){ alert('No fingerprint enrolled for this account. Use enroll flow.'); return; }
+    if(f !== activeAccount.fingerprint){ alert('Fingerprint mismatch'); log(`Cardless deposit fingerprint mismatch for ${activeAccount.name}`); return; }
+    if(m !== activeAccount.mobile){ alert('Mobile number mismatch'); log(`Cardless deposit mobile mismatch`); return; }
+    // generate OTP and show simulated
+    const otp = (Math.floor(Math.random()*900000)+100000);
+    // store OTP on the account object temporarily
+    activeAccount._lastOtp = otp;
+    // show masked mobile and OTP (simulated)
+    document.getElementById('cdOtpArea').innerHTML = `
+       <div class="muted small">Sending OTP to ${m.replace(/^(\d{6})/, '******')}</div>
+       <div class="muted small">(Simulated OTP: ${otp})</div>
+       <div><label class="small">Enter OTP</label><input id="cdEnterOtp" type="text" /></div>
+       <div><label class="small">Deposit Amount (₹)</label><input id="cdAmount" type="number" min="1" /></div>
+       <div class="row"><button id="cdConfirm">Confirm Deposit</button></div>
+    `;
+    document.getElementById('cdConfirm').onclick = ()=> {
+      const ent = document.getElementById('cdEnterOtp').value.trim();
+      const amt = parseFloat(document.getElementById('cdAmount').value);
+      if(ent !== String(activeAccount._lastOtp)){ alert('Incorrect OTP'); log('Cardless deposit OTP failed'); return; }
+      if(isNaN(amt) || amt<=0){ alert('Invalid amount'); return; }
+      activeAccount.balance += amt;
+      activeAccount.transactions.push(`${new Date().toLocaleString()} | CARDLESS-DEPOSIT ₹${amt.toFixed(2)} | bal ₹${activeAccount.balance.toFixed(2)}`);
+      log(`Cardless deposit ₹${amt.toFixed(2)} for ${activeAccount.name}`);
+      alert(`Deposit successful. New balance ₹${activeAccount.balance.toFixed(2)}`);
+      area.innerHTML='';
+    };
+  };
+  document.getElementById('cdCancel').onclick = ()=> area.innerHTML='';
+}
+
+// Cardless Withdraw UI: fingerprint only
+function renderCardlessWithdrawUI(){
+  const area = document.getElementById('atmActionArea');
+  area.innerHTML = `
+    <div><label class="small">Simulate fingerprint (enter fingerprint string)</label><input id="cwFinger" type="text" /></div>
+    <div><label class="small">Amount to withdraw</label><input id="cwAmount" type="number" min="1" /></div>
+    <div class="row"><button id="cwConfirm">Withdraw</button><button id="cwCancel" class="btn-danger">Cancel</button></div>
+  `;
+  document.getElementById('cwConfirm').onclick = ()=> {
+    const f = document.getElementById('cwFinger').value.trim();
+    const amt = parseFloat(document.getElementById('cwAmount').value);
+    if(!f || isNaN(amt)){ alert('Enter fingerprint and amount'); return; }
+    if(!activeAccount.fingerprint){ alert('No fingerprint enrolled for this account'); return; }
+    if(f !== activeAccount.fingerprint){ alert('Fingerprint mismatch'); log('Cardless withdrawal fingerprint mismatch'); return; }
+    if(amt > activeAccount.balance){ alert('Insufficient balance'); return; }
+    activeAccount.balance -= amt;
+    activeAccount.transactions.push(`${new Date().toLocaleString()} | CARDLESS-WITHDRAW ₹${amt.toFixed(2)} | bal ₹${activeAccount.balance.toFixed(2)}`);
+    log(`Cardless withdrawal ₹${amt.toFixed(2)} by ${activeAccount.name}`);
+    alert(`Please collect cash. New balance ₹${activeAccount.balance.toFixed(2)}`);
+    area.innerHTML='';
+  };
+  document.getElementById('cwCancel').onclick = ()=> area.innerHTML='';
+}
+
+// Initialize view
+showView('welcomeView');
+setSession(null);
+log('System initialized with 2 demo accounts.');
+</script>
+</body>
+</html>
